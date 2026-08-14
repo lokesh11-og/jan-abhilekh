@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Jan Abhilekh — Scan Document</title>
+<style>
+  :root{ --navy:#0B3556; --navy-dark:#082740; --saffron:#E8A33D; --green:#1F7A4D; --bg:#F5F6F3; }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Plus Jakarta Sans',sans-serif;background:var(--bg);color:#1B2430;min-height:100vh;display:flex;flex-direction:column;}
+  header{background:linear-gradient(160deg,var(--navy),var(--navy-dark));color:#fff;padding:22px 20px;text-align:center;}
+  header .brand{font-size:17px;font-weight:700;letter-spacing:.02em;}
+  header .sub{font-size:12px;opacity:.7;margin-top:2px;}
+  main{flex:1;padding:22px;display:flex;flex-direction:column;gap:16px;max-width:480px;margin:0 auto;width:100%;}
+  .card{background:#fff;border:1px solid #DFE4E8;border-radius:12px;padding:18px;}
+  .who{font-size:13px;color:#5C6B7A;}
+  .who b{color:#1B2430;}
+  .capture{border:2px dashed #C7D0D8;border-radius:12px;padding:32px 16px;text-align:center;color:#5C6B7A;cursor:pointer;}
+  .capture svg{width:40px;height:40px;color:var(--navy);margin-bottom:10px;}
+  input[type=file]{display:none;}
+  .btn{border:none;border-radius:9px;padding:14px 18px;font-size:15px;font-weight:700;width:100%;cursor:pointer;}
+  .btn-primary{background:var(--saffron);color:var(--navy-dark);}
+  .btn-primary:disabled{opacity:.5;}
+  .preview{width:100%;border-radius:10px;margin-top:12px;display:none;max-height:300px;object-fit:contain;background:#000;}
+  .status{font-size:13px;margin-top:12px;display:none;padding:10px 12px;border-radius:8px;}
+  .status.uploading{background:#FBF1E0;color:#B9781A;display:block;}
+  .status.done{background:#E6F2EB;color:#1F7A4D;display:block;}
+  .status.error{background:#F8EAE8;color:#A6392D;display:block;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Jan Abhilekh — Live Scan</div>
+  <div class="sub">Physical document → your laptop, in real time</div>
+</header>
+<main>
+  <div class="card">
+    <div class="who">Scanning for citizen: <b id="citizenName">Loading…</b></div>
+  </div>
+
+  <div class="card">
+    <label class="capture" id="captureLabel">
+      <svg fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+      <div id="captureText">Tap to open camera &amp; scan the document</div>
+      <input type="file" accept="image/*" capture="environment" id="fileInput">
+    </label>
+    <img id="preview" class="preview">
+    <div class="status" id="status"></div>
+    <button class="btn btn-primary" id="uploadBtn" style="margin-top:14px;display:none;">Send to Jan Abhilekh</button>
+  </div>
+
+  <div class="card" style="font-size:12.5px;color:#5C6B7A;">
+    Watch the OCR processing happen live on the laptop screen after you send the photo.
+  </div>
+</main>
+<script>
+const params = new URLSearchParams(location.search);
+const sessionId = params.get('session');
+const statusEl = document.getElementById('status');
+const uploadBtn = document.getElementById('uploadBtn');
+const fileInput = document.getElementById('fileInput');
+const preview = document.getElementById('preview');
+let selectedFile = null;
+
+if (!sessionId) {
+  document.getElementById('citizenName').textContent = 'No session — reopen the link from the laptop.';
+} else {
+  fetch(`/api/scan/sessions/${sessionId}`).then(r => r.json()).then(s => {
+    document.getElementById('citizenName').textContent = s.citizenName || 'Unknown';
+  }).catch(() => {
+    document.getElementById('citizenName').textContent = 'Could not reach Jan Abhilekh server.';
+  });
+}
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  selectedFile = f;
+  preview.src = URL.createObjectURL(f);
+  preview.style.display = 'block';
+  document.getElementById('captureText').textContent = 'Document captured — review below';
+  uploadBtn.style.display = 'block';
+});
+
+uploadBtn.addEventListener('click', async () => {
+  if (!selectedFile || !sessionId) return;
+  uploadBtn.disabled = true;
+  statusEl.className = 'status uploading';
+  statusEl.textContent = 'Uploading to Jan Abhilekh…';
+  const fd = new FormData();
+  fd.append('photo', selectedFile);
+  try {
+    const r = await fetch(`/api/scan/sessions/${sessionId}/upload`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('upload failed');
+    statusEl.className = 'status done';
+    statusEl.textContent = 'Sent. OCR is now running on the laptop — check the screen.';
+    uploadBtn.textContent = 'Sent ✓';
+  } catch (e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Could not reach the Jan Abhilekh server. Check you\'re on the same Wi-Fi and try again.';
+    uploadBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
